@@ -32,17 +32,107 @@ async def get_trade_history():
             return response.json()
         return []
 
+def group_trades(trades):
+    exits = [t for t in trades if t.get("entryType") == "DEAL_ENTRY_OUT" and t.get("symbol")]
+    entries = [t for t in trades if t.get("entryType") == "DEAL_ENTRY_IN" and t.get("symbol")]
+    entries_by_position = {}
+    for t in entries:
+        pid = t.get("positionId")
+        if pid:
+            entries_by_position[pid] = t
+    groups = {}
+    for trade in exits:
+        symbol = trade.get("symbol")
+        price = trade.get("price")
+        time = trade.get("time", "")[:16]
+        key = str(symbol) + "_" + str(round(float(price), 4)) + "_" + str(time)
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(trade)
+    result = []
+    for key, group in groups.items():
+        total_profit = sum(t.get("profit", 0) or 0 for t in group)
+        total_volume = sum(t.get("volume", 0) or 0 for t in group)
+        first_exit = group[0]
+        first_entry = entries_by_position.get(first_exit.get("positionId"), {})
+        result.append({
+            "group_id": key,
+            "symbol": first_exit.get("symbol"),
+            "type": first_exit.get("type"),
+            "open_time": first_entry.get("time") or first_exit.get("time"),
+            "close_time": first_exit.get("time"),
+            "open_price": first_entry.get("price"),
+            "close_price": first_exit.get("price"),
+            "total_volume": total_volume,
+            "total_profit": round(total_profit, 2),
+            "trade_count": len(group)
+        })
+    return result
+
+def save_grouped_trade(group):
+    try:
+        supabase.table("grouped_trades").upsert(group, on_conflict="group_id").execute()
+        print("נשמר: " + str(group.get("symbol")) + " | " + str(group.get("trade_count")) + " עסקאות | רווח: $" + str(group.get("total_profit")))
+    except Exception as e:
+        print("שגיאה: " + str(e))
+
+def save_trade(trade):
+    data = {
+        "trade_id": trade.get("id"),
+        "symbol": trade.get("symbol"),
+        "type": trade.get("type"),
+        "open_price": trade.get("price"),
+        "volume": trade.get("volume"),
+        "profit": trade.get("profit"),
+        "open_time": trade.get("time"),
+        "created_at": datetime.now().isoformat()
+    }
+    try:
+        supabase.table("trades").upsert(data, on_conflict="trade_id").execute()
+    except Exception as e:
+        print("שגיאה: " + str(e))
+
+def get_all_grouped_trades():
+    try:
+        result = supabase.table("grouped_trades").select("*").execute()
+        return result.data
+    except Exception as e:
+        print("שגיאה: " + str(e))
+        return []
+
+def generate_weekly_insights(trades_data):
+    response = groq_client.chat.completions.create(
+        model="llama3-70b-8192",
+        messages=[{"role": "user", "content": "נתח את נתוני המסחר ותן תובנות בעברית:\n" + trades_data}],
+        max_tokens=800
+    )
+    return response.choices[0].message.content
+
+def run_weekly_report():
+    print("מייצר דוח שבועי...")
+    trades = get_all_grouped_trades()
+    if not trades:
+        print("אין עסקאות עדיין")
+        return
+    total_profit = sum(t.get("total_profit", 0) or 0 for t in trades)
+    wins = [t for t in trades if t.get("total_profit", 0) > 0]
+    summary = "סהכ עסקאות: " + str(len(trades)) + "\nרווח כולל: $" + str(round(total_profit, 2)) + "\nאחוז הצלחה: " + str(round(len(wins) / len(trades) * 100, 1)) + "%"
+    insights = generate_weekly_insights(summary)
+    print("תובנות:\n" + insights)
+
 async def main():
     print("המערכת מתחילה...")
     open_trades = await get_open_trades()
     history = await get_trade_history()
     print("היסטוריה: " + str(len(history)) + " עסקאות גולמיות")
     print("פתוחות: " + str(len(open_trades)))
-    for t in history:
-        if t.get("symbol"):
-            print("שדות: " + str(list(t.keys())))
-            print("עסקה עם סימול: " + str(t))
-            break
+    for trade in history:
+        save_trade(trade)
+    grouped = group_trades(history)
+    print("קבוצות עסקאות: " + str(len(grouped)))
+    for group in grouped:
+        save_grouped_trade(group)
+    run_weekly_report()
     print("סיום!")
 
 asyncio.run(main())
