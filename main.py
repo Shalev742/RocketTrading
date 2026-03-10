@@ -45,7 +45,7 @@ def save_trade(trade, analysis=None):
         "created_at": datetime.utcnow().isoformat()
     }
     try:
-        supabase.table("trades").upsert(data).execute()
+       supabase.table("trades").upsert(data, on_conflict="trade_id").execute()
         print("עסקה נשמרה: " + str(trade.get("symbol")))
     except Exception as e:
         print("שגיאה: " + str(e))
