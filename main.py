@@ -120,7 +120,8 @@ async def main():
     history = await get_trade_history()
     print("היסטוריה: " + str(len(history)) + " עסקאות גולמיות")
     if history:
-        print("דוגמא: " + str(history[0]))
+    supabase.table("debug_log").insert({"data": str(history[0])}).execute()
+    print("נשמרה דוגמא ל-Supabase")
     print("פתוחות: " + str(len(open_trades)))
     for trade in history:
         save_trade(trade)
