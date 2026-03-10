@@ -38,10 +38,11 @@ async def main():
     history = await get_trade_history()
     print("היסטוריה: " + str(len(history)) + " עסקאות גולמיות")
     print("פתוחות: " + str(len(open_trades)))
-    if history:
-        first = history[0]
-        print("שדות זמינים: " + str(list(first.keys())))
-        print("עסקה ראשונה: " + str(first))
+    for t in history:
+        if t.get("symbol"):
+            print("שדות: " + str(list(t.keys())))
+            print("עסקה עם סימול: " + str(t))
+            break
     print("סיום!")
 
 asyncio.run(main())
