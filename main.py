@@ -33,8 +33,10 @@ async def get_trade_history():
         return []
 
 def group_trades(trades):
+    print("מקבץ עסקאות...")
     exits = [t for t in trades if t.get("entryType") == "DEAL_ENTRY_OUT" and t.get("symbol")]
     entries = [t for t in trades if t.get("entryType") == "DEAL_ENTRY_IN" and t.get("symbol")]
+    print("יציאות: " + str(len(exits)) + " | כניסות: " + str(len(entries)))
     entries_by_position = {}
     for t in entries:
         pid = t.get("positionId")
@@ -72,67 +74,22 @@ def group_trades(trades):
 def save_grouped_trade(group):
     try:
         supabase.table("grouped_trades").upsert(group, on_conflict="group_id").execute()
-        print("נשמר: " + str(group.get("symbol")) + " | " + str(group.get("trade_count")) + " עסקאות | רווח: $" + str(group.get("total_profit")))
+        print("נשמר: " + str(group.get("symbol")) + " | " + str(group.get("trade_count")) + " עסקאות | $" + str(group.get("total_profit")))
     except Exception as e:
         print("שגיאה: " + str(e))
-
-def save_trade(trade):
-    data = {
-        "trade_id": trade.get("id"),
-        "symbol": trade.get("symbol"),
-        "type": trade.get("type"),
-        "open_price": trade.get("price"),
-        "volume": trade.get("volume"),
-        "profit": trade.get("profit"),
-        "open_time": trade.get("time"),
-        "created_at": datetime.now().isoformat()
-    }
-    try:
-        supabase.table("trades").upsert(data, on_conflict="trade_id").execute()
-    except Exception as e:
-        print("שגיאה: " + str(e))
-
-def get_all_grouped_trades():
-    try:
-        result = supabase.table("grouped_trades").select("*").execute()
-        return result.data
-    except Exception as e:
-        print("שגיאה: " + str(e))
-        return []
-
-def generate_weekly_insights(trades_data):
-    response = groq_client.chat.completions.create(
-        model="llama3-70b-8192",
-        messages=[{"role": "user", "content": "נתח את נתוני המסחר ותן תובנות בעברית:\n" + trades_data}],
-        max_tokens=800
-    )
-    return response.choices[0].message.content
-
-def run_weekly_report():
-    print("מייצר דוח שבועי...")
-    trades = get_all_grouped_trades()
-    if not trades:
-        print("אין עסקאות עדיין")
-        return
-    total_profit = sum(t.get("total_profit", 0) or 0 for t in trades)
-    wins = [t for t in trades if t.get("total_profit", 0) > 0]
-    summary = "סהכ עסקאות: " + str(len(trades)) + "\nרווח כולל: $" + str(round(total_profit, 2)) + "\nאחוז הצלחה: " + str(round(len(wins) / len(trades) * 100, 1)) + "%"
-    insights = generate_weekly_insights(summary)
-    print("תובנות:\n" + insights)
 
 async def main():
     print("המערכת מתחילה...")
     open_trades = await get_open_trades()
     history = await get_trade_history()
-    print("היסטוריה: " + str(len(history)) + " עסקאות גולמיות")
+    print("היסטוריה: " + str(len(history)))
     print("פתוחות: " + str(len(open_trades)))
-    for trade in history:
-        save_trade(trade)
+    print("מתחיל קיבוץ...")
     grouped = group_trades(history)
-    print("קבוצות עסקאות: " + str(len(grouped)))
+    print("קבוצות: " + str(len(grouped)))
+    print("שומר...")
     for group in grouped:
         save_grouped_trade(group)
-    run_weekly_report()
     print("סיום!")
 
 asyncio.run(main())
