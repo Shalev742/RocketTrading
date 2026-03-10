@@ -23,7 +23,8 @@ async def get_open_trades():
         return []
 
 async def get_trade_history():
-    url = f"https://mt-client-api-v1.london.agiliumtrade.ai/users/current/accounts/{METAAPI_ACCOUNT_ID}/history-deals/time/2024-01-01T00:00:00.000Z/{datetime.utcnow().isoformat()}Z"
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    url = f"https://mt-client-api-v1.london.agiliumtrade.ai/users/current/accounts/{METAAPI_ACCOUNT_ID}/history-deals/time/2024-01-01T00:00:00.000Z/{now}"
     headers = {"auth-token": METAAPI_TOKEN}
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers)
@@ -42,10 +43,10 @@ def save_trade(trade, analysis=None):
         "profit": trade.get("profit"),
         "open_time": trade.get("time"),
         "ai_analysis": analysis,
-        "created_at": datetime.utcnow().isoformat()
+        "created_at": datetime.now().isoformat()
     }
     try:
-       supabase.table("trades").upsert(data, on_conflict="trade_id").execute()
+        supabase.table("trades").upsert(data, on_conflict="trade_id").execute()
         print("עסקה נשמרה: " + str(trade.get("symbol")))
     except Exception as e:
         print("שגיאה: " + str(e))
