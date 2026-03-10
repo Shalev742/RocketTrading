@@ -33,12 +33,12 @@ async def get_trade_history():
         return []
 
 def group_trades(trades):
-    closed = [t for t in trades if t.get("closePrice") is not None]
+    closed = [t for t in trades if t.get("entryType") == "DEAL_ENTRY_OUT"]
     groups = {}
     for trade in closed:
         symbol = trade.get("symbol")
-        close_price = trade.get("closePrice")
-        close_time = trade.get("closeTime") or trade.get("time")
+        close_price = trade.get("price")
+        close_time = trade.get("time", "")
         if not symbol or not close_price:
             continue
         key = str(symbol) + "_" + str(round(float(close_price), 4)) + "_" + str(close_time)[:16]
@@ -55,9 +55,8 @@ def group_trades(trades):
             "symbol": first.get("symbol"),
             "type": first.get("type"),
             "open_time": first.get("time"),
-            "close_time": first.get("closeTime") or first.get("time"),
-            "close_price": first.get("closePrice"),
-            "open_price": first.get("openPrice"),
+            "close_time": first.get("time"),
+            "close_price": first.get("price"),
             "total_volume": total_volume,
             "total_profit": total_profit,
             "trade_count": len(group)
@@ -76,8 +75,7 @@ def save_trade(trade, analysis=None):
         "trade_id": trade.get("id"),
         "symbol": trade.get("symbol"),
         "type": trade.get("type"),
-        "open_price": trade.get("openPrice"),
-        "close_price": trade.get("closePrice"),
+        "open_price": trade.get("price"),
         "volume": trade.get("volume"),
         "profit": trade.get("profit"),
         "open_time": trade.get("time"),
@@ -121,6 +119,8 @@ async def main():
     open_trades = await get_open_trades()
     history = await get_trade_history()
     print("היסטוריה: " + str(len(history)) + " עסקאות גולמיות")
+    if history:
+        print("דוגמא: " + str(history[0]))
     print("פתוחות: " + str(len(open_trades)))
     for trade in history:
         save_trade(trade)
